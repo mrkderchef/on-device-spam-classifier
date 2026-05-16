@@ -2,19 +2,22 @@
 
 import os
 import torch
+import torch.nn as nn
+import pandas as pd
+import numpy as np
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from transformers import BertTokenizer, get_linear_schedule_with_warmup
+from sklearn.utils.class_weight import compute_class_weight
 from tqdm import tqdm
 
-from src.data.preprocessing import load_sms_spam_dataset, preprocess_dataset, split_dataset
 from src.data.dataset import SMSSpamDataset
 from src.models.teacher_model import create_teacher_model
 from src.evaluation.metrics import compute_classification_metrics
 
 
 def train_teacher(
-    data_path: str,
+    data_dir: str = "data/processed",
     output_dir: str = "outputs/checkpoints",
     epochs: int = 5,
     batch_size: int = 32,
@@ -24,8 +27,12 @@ def train_teacher(
 ):
     """Fine-tune the teacher model on the SMS spam dataset.
 
+    Uses the preprocessed train/val CSVs produced by the preprocessing pipeline.
+    Applies class-weighted CrossEntropyLoss to handle class imbalance
+    (87.4% ham / 12.6% spam).
+
     Args:
-        data_path: Path to the raw SMS dataset.
+        data_dir: Directory containing train.csv and val.csv.
         output_dir: Directory to save model checkpoints.
         epochs: Number of training epochs.
         batch_size: Training batch size.
@@ -35,11 +42,21 @@ def train_teacher(
     """
     torch.manual_seed(seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Device: {device}")
 
-    # Load and preprocess data
-    df = load_sms_spam_dataset(data_path)
-    df = preprocess_dataset(df)
-    train_df, val_df, test_df = split_dataset(df, seed=seed)
+    # Load preprocessed splits
+    train_df = pd.read_csv(os.path.join(data_dir, "train.csv"))
+    val_df = pd.read_csv(os.path.join(data_dir, "val.csv"))
+    print(f"Train: {len(train_df)} samples, Val: {len(val_df)} samples")
+
+    # Compute class weights for imbalanced dataset
+    class_weights = compute_class_weight(
+        "balanced",
+        classes=np.array([0, 1]),
+        y=train_df["label"].values,
+    )
+    class_weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
+    print(f"Class weights: ham={class_weights[0]:.4f}, spam={class_weights[1]:.4f}")
 
     # Tokenizer and datasets
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
@@ -52,6 +69,10 @@ def train_teacher(
     # Model
     model = create_teacher_model()
     model.to(device)
+    print(f"Teacher parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
+
+    # Weighted loss function
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
 
     # Optimizer and scheduler
     optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01)
@@ -71,8 +92,8 @@ def train_teacher(
             attention_mask = batch["attention_mask"].to(device)
             labels = batch["label"].to(device)
 
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-            loss = outputs.loss
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+            loss = loss_fn(outputs.logits, labels)
 
             optimizer.zero_grad()
             loss.backward()
@@ -112,4 +133,4 @@ def train_teacher(
 
 
 if __name__ == "__main__":
-    train_teacher(data_path="data/raw/SMSSpamCollection")
+    train_teacher()

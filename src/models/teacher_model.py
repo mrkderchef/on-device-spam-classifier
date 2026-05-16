@@ -28,9 +28,10 @@ def get_teacher_config() -> dict:
     """Return teacher model configuration summary."""
     return {
         "model_name": "bert-base-uncased",
-        "num_parameters": "~110M",
+        "num_parameters": 109_483_778,
         "num_layers": 12,
         "hidden_size": 768,
         "num_attention_heads": 12,
-        "fp32_size_mb": "~420",
+        "intermediate_size": 3072,
+        "fp32_size_mb": 417.6,
     }

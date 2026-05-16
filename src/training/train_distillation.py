@@ -4,12 +4,12 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import pandas as pd
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from transformers import BertTokenizer, BertForSequenceClassification, get_linear_schedule_with_warmup
 from tqdm import tqdm
 
-from src.data.preprocessing import load_sms_spam_dataset, preprocess_dataset, split_dataset
 from src.data.dataset import SMSSpamDataset
 from src.models.student_model import create_student_model, count_parameters
 from src.evaluation.metrics import compute_classification_metrics
@@ -53,7 +53,7 @@ def distillation_loss(
 
 
 def train_distillation(
-    data_path: str,
+    data_dir: str = "data/processed",
     teacher_path: str = "outputs/checkpoints/teacher_best",
     output_dir: str = "outputs/checkpoints",
     epochs: int = 15,
@@ -66,8 +66,11 @@ def train_distillation(
 ):
     """Train the student model using knowledge distillation from the teacher.
 
+    Uses the preprocessed train/val CSVs. No explicit class weighting — the
+    teacher's soft targets implicitly handle class difficulty (see DECISIONS.md).
+
     Args:
-        data_path: Path to the raw SMS dataset.
+        data_dir: Directory containing train.csv and val.csv.
         teacher_path: Path to the fine-tuned teacher model.
         output_dir: Directory to save model checkpoints.
         epochs: Number of training epochs.
@@ -80,11 +83,12 @@ def train_distillation(
     """
     torch.manual_seed(seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Device: {device}")
 
-    # Load and preprocess data
-    df = load_sms_spam_dataset(data_path)
-    df = preprocess_dataset(df)
-    train_df, val_df, test_df = split_dataset(df, seed=seed)
+    # Load preprocessed splits
+    train_df = pd.read_csv(os.path.join(data_dir, "train.csv"))
+    val_df = pd.read_csv(os.path.join(data_dir, "val.csv"))
+    print(f"Train: {len(train_df)} samples, Val: {len(val_df)} samples")
 
     # Tokenizer and datasets
     tokenizer = BertTokenizer.from_pretrained(teacher_path)
@@ -179,4 +183,4 @@ def train_distillation(
 
 
 if __name__ == "__main__":
-    train_distillation(data_path="data/raw/SMSSpamCollection")
+    train_distillation()

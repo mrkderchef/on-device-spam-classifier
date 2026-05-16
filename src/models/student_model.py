@@ -44,12 +44,13 @@ def create_student_model(
 def get_student_config() -> dict:
     """Return student model configuration summary."""
     return {
+        "num_parameters": 9_495_042,
         "num_layers": 3,
         "hidden_size": 256,
         "num_attention_heads": 4,
         "intermediate_size": 512,
-        "estimated_parameters": "~5-15M",
-        "estimated_fp32_size_mb": "~20-60",
+        "fp32_size_mb": 36.2,
+        "compression_ratio": 11.5,
     }
 
 
