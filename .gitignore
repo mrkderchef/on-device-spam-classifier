@@ -25,9 +25,13 @@ env/
 
 # Data
 data/raw/*
-data/processed/*
 !data/raw/.gitkeep
+!data/raw/readme
+data/processed/*
 !data/processed/.gitkeep
+!data/processed/train.csv
+!data/processed/val.csv
+!data/processed/test.csv
 
 # Outputs
 outputs/checkpoints/*
