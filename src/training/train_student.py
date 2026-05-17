@@ -14,6 +14,7 @@ from tqdm import tqdm
 from src.data.dataset import SMSSpamDataset
 from src.models.student_model import create_student_model, count_parameters
 from src.evaluation.metrics import compute_classification_metrics
+from src.utils.training_logs import append_jsonl, make_log_paths, write_json
 
 
 def train_student(
@@ -41,7 +42,20 @@ def train_student(
     """
     torch.manual_seed(seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    log_paths = make_log_paths("student_baseline")
     print(f"Device: {device}")
+    append_jsonl(
+        log_paths["events"],
+        {
+            "event": "start",
+            "device": str(device),
+            "epochs": epochs,
+            "batch_size": batch_size,
+            "learning_rate": learning_rate,
+            "max_length": max_length,
+            "seed": seed,
+        },
+    )
 
     # Load preprocessed splits
     train_df = pd.read_csv(os.path.join(data_dir, "train.csv"))
@@ -68,7 +82,8 @@ def train_student(
     # Model
     model = create_student_model(max_position_embeddings=max_length)
     model.to(device)
-    print(f"Student model parameters: {count_parameters(model):,}")
+    trainable_params = count_parameters(model)
+    print(f"Student model parameters: {trainable_params:,}")
 
     # Weighted loss function
     loss_fn = nn.CrossEntropyLoss(weight=class_weights)
@@ -82,6 +97,8 @@ def train_student(
 
     # Training loop
     best_val_f1 = 0.0
+    best_epoch = 0
+    history = []
     for epoch in range(epochs):
         model.train()
         total_loss = 0.0
@@ -119,17 +136,53 @@ def train_student(
                 all_labels.extend(labels.cpu().tolist())
 
         metrics = compute_classification_metrics(all_labels, all_preds)
+        epoch_record = {"epoch": epoch + 1, "loss": avg_loss, **metrics}
+        history.append(epoch_record)
+        append_jsonl(log_paths["events"], {"event": "epoch", **epoch_record})
         print(f"Epoch {epoch+1} — Loss: {avg_loss:.4f} | Val F1: {metrics['f1']:.4f}")
 
         if metrics["f1"] > best_val_f1:
             best_val_f1 = metrics["f1"]
+            best_epoch = epoch + 1
             os.makedirs(output_dir, exist_ok=True)
             save_path = os.path.join(output_dir, "student_baseline_best")
             model.save_pretrained(save_path)
             tokenizer.save_pretrained(save_path)
+            append_jsonl(
+                log_paths["events"],
+                {
+                    "event": "checkpoint_saved",
+                    "checkpoint": save_path,
+                    "best_epoch": best_epoch,
+                    "best_val_f1": best_val_f1,
+                },
+            )
             print(f"  Saved best student baseline model (F1: {best_val_f1:.4f})")
 
+    write_json(
+        log_paths["summary"],
+        {
+            "run": "student_baseline",
+            "device": str(device),
+            "epochs": epochs,
+            "batch_size": batch_size,
+            "learning_rate": learning_rate,
+            "max_length": max_length,
+            "seed": seed,
+            "train_samples": len(train_df),
+            "val_samples": len(val_df),
+            "trainable_params": trainable_params,
+            "best_epoch": best_epoch,
+            "best_val_f1": best_val_f1,
+            "history": history,
+        },
+    )
+    append_jsonl(
+        log_paths["events"],
+        {"event": "complete", "best_epoch": best_epoch, "best_val_f1": best_val_f1},
+    )
     print(f"\nTraining complete. Best Val F1: {best_val_f1:.4f}")
+    print(f"Summary written to: {log_paths['summary']}")
 
 
 if __name__ == "__main__":

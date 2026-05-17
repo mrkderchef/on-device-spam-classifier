@@ -1,0 +1,40 @@
+{
+  "checkpoint": "outputs/checkpoints/student_distilled_best",
+  "device": "cpu",
+  "splits": {
+    "test": {
+      "accuracy": 0.990979381443299,
+      "confusion_matrix": [
+        [
+          674,
+          4
+        ],
+        [
+          3,
+          95
+        ]
+      ],
+      "f1": 0.9644670050761421,
+      "precision": 0.9595959595959596,
+      "recall": 0.9693877551020408,
+      "samples": 776
+    },
+    "val": {
+      "accuracy": 0.9884020618556701,
+      "confusion_matrix": [
+        [
+          678,
+          0
+        ],
+        [
+          9,
+          89
+        ]
+      ],
+      "f1": 0.9518716577540107,
+      "precision": 1.0,
+      "recall": 0.9081632653061225,
+      "samples": 776
+    }
+  }
+}
