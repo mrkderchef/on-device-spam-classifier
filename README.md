@@ -408,7 +408,7 @@ If you use this work, please cite:
 ```bibtex
 @misc{on-device-spam-classifier,
   title={Knowledge Distillation for On-Device Spam Detection},
-  author={mrkderchef},
+  author={Marek Kamm},
   year={2026},
   url={https://github.com/mrkderchef/on-device-spam-classifier}
 }
